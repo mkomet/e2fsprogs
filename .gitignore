@@ -215,6 +215,13 @@ resize/resize2fs
 resize/resize2fs.8
 resize/test_extent
 resize/test_extent.out
+scrub/e2scrub
+scrub/e2scrub.8
+scrub/e2scrub.conf
+scrub/e2scrub_all
+scrub/e2scrub_all.8
+scrub/e2scrub_all.cron
+scrub/e2scrub_all_cron
 tags
 TAGS
 tests/progs/test_icount

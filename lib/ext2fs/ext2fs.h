@@ -207,6 +207,8 @@ typedef struct ext2_file *ext2_file_t;
 #define EXT2_FLAG_BBITMAP_TAIL_PROBLEM	0x1000000
 #define EXT2_FLAG_IBITMAP_TAIL_PROBLEM	0x2000000
 
+#define EXT2_FLAG_IGNORE_DAC_PERMS	0x40000000
+
 /*
  * Special flag in the ext2 inode i_flag field that means that this is
  * a new inode.  (So that ext2_write_inode() can clear extra fields.)

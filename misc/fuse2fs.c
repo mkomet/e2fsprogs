@@ -327,6 +327,8 @@ struct fuse2fs {
 	int norecovery;
 	FILE *err_fp;
 	unsigned int next_generation;
+	int allow_other;
+	int ignore_perms;
 };
 
 #define FUSE2FS_CHECK_MAGIC(fs, ptr, num) do {if ((ptr)->magic != (num)) \
@@ -694,7 +696,7 @@ static int check_inum_access(ext2_filsys fs, ext2_ino_t ino, mode_t mask)
 	}
 
 	/* otherwise check other */
-	if ((mask & perms) == mask)
+	if ((mask & perms) == mask || (fs->flags & EXT2_FLAG_IGNORE_DAC_PERMS))
 		return 0;
 	return -EACCES;
 }
@@ -3272,7 +3274,7 @@ static int op_ioctl(const char *path EXT2FS_ATTR((unused)), int cmd,
 	FUSE2FS_CHECK_CONTEXT(ff);
 	fs = ff->fs;
 	pthread_mutex_lock(&ff->bfl);
-	switch ((unsigned long) cmd) {
+	switch (cmd) {
 #ifdef SUPPORT_I_FLAGS
 	case EXT2_IOC_GETFLAGS:
 		ret = ioctl_getflags(fs, fh, data);
@@ -3659,6 +3661,8 @@ static struct fuse_opt fuse2fs_opts[] = {
 	FUSE2FS_OPT("fuse2fs_debug",	debug,			1),
 	FUSE2FS_OPT("no_default_opts",	no_default_opts,	1),
 	FUSE2FS_OPT("norecovery",	norecovery,		1),
+	FUSE2FS_OPT("allow_other",	allow_other,	1),
+	FUSE2FS_OPT("ignore_perms",	ignore_perms,	1),
 
 	FUSE_OPT_KEY("-V",             FUSE2FS_VERSION),
 	FUSE_OPT_KEY("--version",      FUSE2FS_VERSION),
@@ -3697,8 +3701,10 @@ static int fuse2fs_opt_proc(void *data, const char *arg,
 	"    -o minixdf             minix-style df\n"
 	"    -o fakeroot            pretend to be root for permission checks\n"
 	"    -o no_default_opts     do not include default fuse options\n"
-	"    -o norecovery	    don't replay the journal (implies ro)\n"
+	"    -o norecovery	    	don't replay the journal (implies ro)\n"
 	"    -o fuse2fs_debug       enable fuse2fs debugging\n"
+	"    -o allow_other         allow other user access (man 7 fuse)\n"
+	"    -o ignore_perms        ignore all dac permissions for this fs\n"
 	"\n",
 			outargs->argv[0]);
 		if (key == FUSE2FS_HELPFULL) {
@@ -3734,14 +3740,14 @@ int main(int argc, char *argv[])
 
 	fuse_opt_parse(&args, &fctx, fuse2fs_opts, fuse2fs_opt_proc);
 	if (fctx.device == NULL) {
-		fprintf(stderr, "Missing ext4 device/image\n");
+		fprintf(stderr, "Missin	g ext4 device/image\n");
 		fprintf(stderr, "See '%s -h' for usage\n", argv[0]);
 		exit(1);
 	}
 
 	if (fctx.norecovery)
 		fctx.ro = 1;
-	if (fctx.ro)
+	if (fctx.ro && fctx.debug)
 		printf("%s", _("Mounting read-only.\n"));
 
 #ifdef ENABLE_NLS
@@ -3775,6 +3781,8 @@ int main(int argc, char *argv[])
 	ret = 2;
 	if (!fctx.ro)
 		flags |= EXT2_FLAG_RW;
+	if (fctx.ignore_perms)
+		flags |= EXT2_FLAG_IGNORE_DAC_PERMS;
 	err = ext2fs_open2(fctx.device, NULL, flags, 0, 0, unix_io_manager,
 			   &global_fs);
 	if (err) {
@@ -3856,6 +3864,10 @@ int main(int argc, char *argv[])
 	snprintf(extra_args, BUFSIZ, "-okernel_cache,subtype=ext4,use_ino,"
 		 "fsname=%s,attr_timeout=0" FUSE_PLATFORM_OPTS,
 		 fctx.device);
+	if (fctx.ro) 
+		strcat(extra_args, ",ro");
+	if (fctx.allow_other) 
+		strcat(extra_args, ",allow_other");
 	if (fctx.no_default_opts == 0)
 		fuse_opt_add_arg(&args, extra_args);
 
